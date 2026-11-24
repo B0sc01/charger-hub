@@ -325,14 +325,43 @@ function render(data){
   const totalAll  = data.reduce((a,b)=>a+(b.total||0),0);
   const avail     = data.filter(x=>x.ok && x.free && x.free.length).length;
   const okCount   = data.filter(x=>x.ok).length;
+  const failCount = data.length - okCount;
+  // 失败原因里出现「登录」字样 → 判定为 token 失效
+  const loginFail = data.some(x=>!x.ok && /登录|token|凭据|失效|过期/i.test(x.error||''));
 
-  let html = `<div class="summary ${totalFree?'':'none'}">
+  let html = '';
+  if(okCount === 0 && failCount > 0){
+    // 全部查询失败：绝不显示「0 个空闲」，否则会误判成没空位
+    const reason = loginFail ? '登录凭据已失效（接口返回「请登录」）' : '全部柜子查询失败（网络或接口异常）';
+    html += `<div class="summary none">
+      <div>
+        <div class="big" style="color:var(--danger)">⚠️ 查不到数据</div>
+        <div class="small">${esc(reason)}<br>这不是「没有空位」，是根本没有查询成功。</div>
+      </div>
+      <div style="font-size:30px;font-weight:800;color:var(--danger)">!</div>
+    </div>
+    <div class="card" style="border-color:var(--danger)">
+      <div class="name">👉 下一步怎么办</div>
+      <div class="freeList" style="line-height:1.9">
+        ${loginFail
+          ? '在 Mac 微信里重新打开一次充电小程序，重新抓一个 token 填到下面设置里即可。<br>（日常使用不需要电脑，只有 token 失效这一刻需要抓一次）'
+          : '先点右上角刷新重试；仍失败就检查手机网络，或稍后再试。'}
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn primary" onclick="openHelp()">❓ 怎么重新拿 token</button>
+        <button class="btn ghost" onclick="document.getElementById('setup').scrollIntoView({behavior:'smooth'})">填写新 token</button>
+      </div>
+    </div>`;
+  } else {
+    html += `<div class="summary ${totalFree?'':'none'}">
       <div>
         <div class="big">${totalFree>0 ? `共 ${totalFree} 个空闲口可用` : '当前没有空闲口'}</div>
-        <div class="small">${avail}/${okCount} 个柜子有空位 · 共 ${totalAll} 个充电口</div>
+        <div class="small">${avail}/${okCount} 个柜子有空位 · 共 ${totalAll} 个充电口${failCount?` · <b style="color:var(--danger)">${failCount} 个查询失败</b>`:''}</div>
       </div>
       <div style="font-size:32px;font-weight:800;color:${totalFree?'var(--free)':'var(--danger)'}">${totalFree}</div>
     </div>`;
+    if(failCount) html += `<div class="card" style="border-color:var(--danger)"><div class="freeList">⚠️ ${failCount} 个柜子查询失败${loginFail?'（token 可能已失效，可重新抓一次）':''}，结果只统计了成功的部分。</div></div>`;
+  }
 
   data.forEach(d=>{
     if(!d.ok){
